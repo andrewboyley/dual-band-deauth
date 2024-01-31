@@ -151,5 +151,5 @@ while true; do
   check_restarts
 
   cp "$channel_file" "$old_channel_file"
-  sleep 300
+  sleep 600
 done
