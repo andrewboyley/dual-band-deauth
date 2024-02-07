@@ -10,6 +10,7 @@ channel_file="channel.txt"
 old_channel_file="old_channel.txt"
 
 was_5g_deauthing=0
+session_name="dos_pursuit"
 
 stop_monitor_mode() {
   # Check to see if all interfaces are in monitor mode, else put them in monitor mode
@@ -52,11 +53,11 @@ process_capture() {
 }
 
 create_tmux_session() {
-  # Create a tmux session with two panes
   tmux new-session -d -s dos_pursuit
-  tmux split-window -v -t 0
-  tmux split-window -h -t 0
-  tmux split-window -h -t 2
+  # Create a tmux session with two panes
+  tmux split-window -v -t ${session_name}.0
+  tmux split-window -h -t ${session_name}.0
+  tmux split-window -h -t ${session_name}.2
 }
 
 mdk4_deauth() {
@@ -127,8 +128,25 @@ if [ "$(id -u)" != "0" ]; then
   exit 1
 fi
 
+#Check if script is currently executed inside tmux session or not
+function check_inside_tmux() {
+
+	# debug_print
+
+	local parent_pid
+	local parent_window
+	parent_pid=$(ps -o ppid= ${PPID} 2> /dev/null | tr -d ' ')
+	parent_window="$(ps --no-headers -p "${parent_pid}" -o comm= 2> /dev/null)"
+	if [[ "${parent_window}" =~ tmux ]]; then
+		return 0
+	fi
+	return 1
+}
+
+
 # Create the tmux session with two panes
 create_tmux_session
+
 
 rm -rf "$log_file" "$old_channel_file" >/dev/null 2>&1
 
