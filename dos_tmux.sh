@@ -235,8 +235,9 @@ rm -rf "$log_file" "$old_channel_file" >/dev/null 2>&1
 
 # Log in pane 1
 echo "$(date "+%F %T")| Starting DOS pursuit attack" >>"$log_file"
-tmux send-keys -t ${session_name}:0.0 "tail -f $log_file" Enter
+# tmux send-keys -t ${session_name}:0.0 "tail -f $log_file" ENTER
 tmux select-pane -t ${session_name}:0.0
+tail -f "$log_file" &
 
 # Periodically run airodump-ng in the first tmux pane
 while true; do
